@@ -42,4 +42,19 @@
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
 
-            let ct
+            let ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0);
+
+            // convert to image
+            let img = document.createElement('img');
+            img.src = canvas.toDataURL('image/png');
+
+            imagesDiv.appendChild(img);
+
+            count++;
+        }, 1000); // 1 second interval
+    }
+</script>
+
+</body>
+</html>
