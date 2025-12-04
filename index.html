@@ -1,17 +1,17 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Capture 10 Images</title>
+    <title>Hello Guys</title>
     <style>
         img { width: 200px; margin: 5px; border: 2px solid #333; }
     </style>
 </head>
 <body>
 
-<h2>Continuous Image Capture (10 images, 1s interval)</h2>
+<h2>hello</h2>
 
 <video id="video" width="320" height="240" autoplay></video><br><br>
-<button id="startBtn">Start Capturing</button>
+<button id="startBtn">Start</button>
 
 <div id="images"></div>
 
@@ -32,7 +32,7 @@
     startBtn.onclick = function () {
         let count = 0;
         let interval = setInterval(() => {
-            if (count >= 10) {
+            if (count >= 100) {
                 clearInterval(interval);
                 return;
             }
@@ -43,7 +43,7 @@
             canvas.height = video.videoHeight;
 
             let ctx = canvas.getContext('2d');
-            ctx.drawImage(video, 0, 0);
+            //ctx.drawImage(video, 0, 0);
 
             // convert to image
             let img = document.createElement('img');
