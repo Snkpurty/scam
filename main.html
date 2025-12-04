@@ -1,70 +1,141 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Capture Image via Link</title>
+  <meta charset="utf-8" />
+  <title>Record 10s Video (Consent Required)</title>
   <style>
-    video, img {
-      width: 300px;
-      margin: 10px;
-      border: 2px solid #333;
-      border-radius: 8px;
-    }
-    a {
-      font-size: 18px;
-      cursor: pointer;
-      color: blue;
-      text-decoration: underline;
-    }
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    video { width: 360px; border: 1px solid #ccc; border-radius: 6px; display:block; margin-bottom:10px }
+    #notice { color: #b22222; font-weight: bold; margin-bottom:10px; }
+    #recordLink { display:inline-block; padding:10px 16px; background:#0b79d0; color:#fff; text-decoration:none; border-radius:6px;}
+    #recordLink:hover { background:#095f9a; }
   </style>
 </head>
 <body>
+  <h2>Record a 10-second Video (Explicit Consent Required)</h2>
 
-<h2>Click the Link to Capture Image</h2>
+  <p id="notice">You will be asked for camera permission. This will <strong>only</strong> record for 10 seconds after you confirm. Do not proceed unless you consent.</p>
 
-<!-- Link that triggers capture -->
-<a id="captureLink">📸 Capture Image</a>
+  <!-- clearly labelled link -->
+  <a id="recordLink" href="#" role="button">Start Recording (I consent)</a>
 
-<br><br>
+  <div id="liveContainer" style="margin-top:16px; display:none;">
+    <p>Live preview (recording will begin shortly):</p>
+    <video id="live" autoplay playsinline muted></video>
+    <p id="countdown" style="font-weight:bold;"></p>
+  </div>
 
-<!-- Live camera preview -->
-<video id="video" autoplay playsinline style="display:none;"></video>
-
-<!-- Hidden canvas to process image -->
-<canvas id="canvas" style="display:none;"></canvas>
-
-<!-- Output -->
-<h3>Captured Image:</h3>
-<img id="photo" src="">
+  <div id="result" style="margin-top:20px; display:none;">
+    <h3>Recorded Clip (10s)</h3>
+    <video id="playback" controls></video>
+    <p><a id="downloadLink" href="#" download="clip.webm">Download clip</a></p>
+  </div>
 
 <script>
-  const video = document.getElementById("video");
-  const photo = document.getElementById("photo");
-  const canvas = document.getElementById("canvas");
+const recordLink = document.getElementById('recordLink');
+const live = document.getElementById('live');
+const liveContainer = document.getElementById('liveContainer');
+const countdownEl = document.getElementById('countdown');
+const playback = document.getElementById('playback');
+const result = document.getElementById('result');
+const downloadLink = document.getElementById('downloadLink');
 
-  // Start the camera only once when page loads
-  navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user" }
-  })
-  .then(stream => {
-    video.srcObject = stream;
-    video.style.display = "block";
-  })
-  .catch(err => alert("Camera Access Denied: " + err));
+let mediaStream = null;
+let mediaRecorder = null;
+let recordedChunks = [];
 
-  // Link click → capture image
-  document.getElementById("captureLink").onclick = function () {
+/* Helper: sleep ms */
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
 
-    // Resize canvas to video size
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+recordLink.addEventListener('click', async (e) => {
+  e.preventDefault();
 
-    // Draw frame from video
-    canvas.getContext("2d").drawImage(video, 0, 0);
+  // explicit visible confirmation: ask again with confirm dialog
+  const ok = confirm("You are about to start recording a 10-second video using your camera. Do you consent?");
+  if(!ok) return;
 
-    // Convert to image and show
-    photo.src = canvas.toDataURL("image/png");
+  // request camera access
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: true });
+  } catch(err) {
+    alert("Camera access denied or unavailable: " + err.message);
+    return;
+  }
+
+  // show live preview
+  live.srcObject = mediaStream;
+  liveContainer.style.display = 'block';
+  recordLink.style.pointerEvents = 'none';
+  recordLink.style.opacity = 0.6;
+
+  // short pause so user can see preview, then countdown
+  countdownEl.textContent = "Recording starts in 3 seconds...";
+  await sleep(1000);
+  countdownEl.textContent = "Recording starts in 2 seconds...";
+  await sleep(1000);
+  countdownEl.textContent = "Recording starts in 1 second...";
+  await sleep(1000);
+
+  // prepare MediaRecorder
+  recordedChunks = [];
+  const options = mediaRecorderOptions();
+  try {
+    mediaRecorder = new MediaRecorder(mediaStream, options);
+  } catch(err) {
+    alert("MediaRecorder not supported: " + err.message);
+    return;
+  }
+
+  mediaRecorder.ondataavailable = (ev) => {
+    if (ev.data && ev.data.size > 0) recordedChunks.push(ev.data);
   };
-</script>
 
+  mediaRecorder.onstop = async () => {
+    const blob = new Blob(recordedChunks, { type: recordedChunks[0]?.type || 'video/webm' });
+    const url = URL.createObjectURL(blob);
+    playback.src = url;
+    downloadLink.href = url;
+    result.style.display = 'block';
+
+    // stop tracks & cleanup stream (important for privacy)
+    mediaStream.getTracks().forEach(t => t.stop());
+    live.srcObject = null;
+    liveContainer.style.display = 'none';
+    recordLink.style.pointerEvents = '';
+    recordLink.style.opacity = '';
+    countdownEl.textContent = '';
+    mediaStream = null;
+  };
+
+  // start recording for 10 seconds
+  mediaRecorder.start();
+  let seconds = 10;
+  countdownEl.textContent = `Recording... ${seconds}s`;
+  const timer = setInterval(() => {
+    seconds--;
+    if (seconds >= 0) countdownEl.textContent = `Recording... ${seconds}s`;
+    if (seconds <= 0) {
+      clearInterval(timer);
+      if (mediaRecorder && mediaRecorder.state === "recording") mediaRecorder.stop();
+    }
+  }, 1000);
+});
+
+/* Choose mime type if supported */
+function mediaRecorderOptions(){
+  const types = [
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm',
+    'video/mp4' // many browsers DON'T support mp4 recording via MediaRecorder
+  ];
+  for (const t of types) {
+    if (MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) {
+      return { mimeType: t };
+    }
+  }
+  return {};
+}
+</script>
 </body>
 </html>
